@@ -1,6 +1,7 @@
 #include <iostream>
 #include <functional>
 #include <cstring>
+#include <string>
 
 #include "slab.h"
 #include "ops.h"
@@ -24,16 +25,10 @@ void putStr(Object obj, const char* st)
     }
 }
 
-char *putName(char *pc, char *name)
+char *putName(char *pc, const char *name)
 {
-	while(*name != '\0')
-	{
-		*pc = *name;
-		pc++;
-		name++;
-	}
-	*pc = '\0';
-	pc++;
+	strcpy(pc, name);
+	pc += strlen(name)+1;
 	return pc;
 }
 
@@ -45,6 +40,19 @@ char *setReg(char *pc, char reg, uint32_t data)
 	*pc = reg;
 	pc++;
 	tmp = (uint32_t*)pc;
+	*tmp = data;
+	tmp++;
+	return (char*)tmp;
+}
+
+char *setRegPtr(char *pc, char reg, uintptr_t data)
+{
+	uintptr_t *tmp;
+	*pc = MOV;
+	pc++;
+	*pc = reg;
+	pc++;
+	tmp = (uintptr_t*)pc;
 	*tmp = data;
 	tmp++;
 	return (char*)tmp;
@@ -72,7 +80,7 @@ char *OUINT(char *pc, OPS op, uint32_t dat)
 	return (char*)tmp;
 }
 
-char *OSTR(char *pc, OPS op, char *str)
+char *OSTR(char *pc, OPS op, const char *str)
 {
 	*pc = (char)op;
 	pc++;
@@ -93,12 +101,13 @@ char *movReg(char *op, char reg1, char reg2)
 
 void buildOps(uint32_t size, char* ops)
 {
-	char *ctmp, *libNameOffset;
+	char *ctmp;
 	uint32_t *tmp;
 	memset(ops, '0', size);
-	char *pc = libNameOffset = ops + 4;
-	ctmp = pc;
-	pc = putName(pc, "/usr/lib/x86_64-linux-gnu/libncurses.a");
+	char *pc = ops + 4;
+	char *libNameOffset = pc;
+	ctmp = ops;
+	pc = putName(pc, "/usr/lib/x86_64-linux-gnu/libncurses.so.6.2");
 	char *ncurses = pc;
 	pc = putName(pc, "ncurses");
 	char *initScr = pc;
@@ -115,6 +124,7 @@ void buildOps(uint32_t size, char* ops)
 	pc = putName(pc, "getch");
 	char *arg1 = pc;
 	pc = putName(pc, "%i");
+	char *_start = pc;
 	pc = setReg(pc, 0, libNameOffset - ctmp);
 	pc = setReg(pc, 1, ncurses - ctmp);
 	pc = ORR(pc, FFIBINDLIB, 0, 1);
@@ -143,30 +153,62 @@ void buildOps(uint32_t size, char* ops)
 	char *jmp = pc;
 	pc = ORR(pc, ADD, 0, 1);
 	pc = ORR(pc, CMP, 0, 4);
-	pc = OUINT(pc, JNE, pc - ctmp);
+	pc = OUINT(pc, JNE, jmp - ctmp);
+	pc = setReg(pc, 7, 0);
 	pc = OSTR(pc, FFICALL, "initscr");
 	pc = OSTR(pc, FFICALL, "raw");
 	pc = OSTR(pc, FFICALL, "noecho");
 	pc = movReg(pc, 0, 6);
-	pc = setReg(pc, 0, arg1 - ctmp);
+	pc = setRegPtr(pc, 0, (uintptr_t)arg1);
 	pc = movReg(pc, 6, 1);
+	pc = setReg(pc, 7, 2);
 	pc = OSTR(pc, FFICALL, "printw");
+	pc = setReg(pc, 7, 0);
 	pc = OSTR(pc, FFICALL, "getch");
+	*pc = HLT;
+	pc++;
+	uint32_t *start = (uint32_t*)ops;
+	*start = _start - ops;
+	ops++;
 }
 
-int main()
+void buildOps2(int size, char *ops)
 {
-	char ops[256];
-	 buildOps(256, ops);
+	char *pc = ops+4;
+	char *start = pc;
+	pc = setReg(pc, 0, 0);
+	pc = setReg(pc, 1, 1);
+	pc = setReg(pc, 4, 10);
+	char *jmp = pc;
+	pc = ORR(pc, ADD, 0, 1);
+	pc = ORR(pc, CMP, 0, 4);
+	pc = OUINT(pc, JNE, jmp - ops);
+	pc = OUINT(pc, HLT, 1);
+	uint32_t *begin = (uint32_t*)ops;
+	*begin = start - ops;
+}
+
+void hltFun(OpStream *os)
+{
+	int r1 = os->regs[0];
+	exit(r1);
+}
+
+int main(int argc, char *argv[])
+{
+	char ops[512];
+	buildOps(512, ops);
     SlabAllocator slab(4096, 4);
     Object obj = *slab.slabAlloc(32);
     putStr(obj, "hello, world\0");
     std::cout<<obj.getPrim()<<"\n";
     slab.slabFree(&obj);
-    OpStream os = OpStream(1024, ops, 256);
+    OpStream os = OpStream(1024, ops, 512);
     std::cout<<(uint32_t)MOV<<"\n";
     std::cout<<"binding funs\n";
     bindFunctions(&os);
+    os.funs[HLT] = hltFun;
+    std::cout<<"begin: "<<(uint32_t)*ops<<"\n";
     std::cout<<"running stream\n";
     try {
 		os.run();

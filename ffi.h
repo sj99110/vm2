@@ -18,4 +18,10 @@ class FFI
 	int loadFun(std::string name, std::string lib);
 	int callFun(std::string);
 	void *getFun(std::string name);
+	void* operator[](std::string name)
+	{
+		return (void*)&funs[name];
+	}
 };
+
+void panic(std::string str);

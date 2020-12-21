@@ -5,69 +5,69 @@
 #include "funs.h"
 #include "ops.h"
 
-char *getRegs(char *ops, int *reg1, int *reg2)
+char *getRegs(char *ops, char *reg1, char *reg2)
 {
-	*reg1 = (int)*ops;
+	*reg1 = *ops;
 	ops++;
 	if(reg2 == NULL)
 		return ops;
-	*reg2 = (int)*ops;
+	*reg2 = *ops;
 	ops++;
 	return ops;
 }
 
 void addFun(OpStream *os)
 {
-	int r1, r2;
+	char r1, r2;
 	os->pc = getRegs(os->pc, &r1, &r2);
 	os->regs[r1] += os->regs[r2];
 }
 
 void subFun(OpStream *os)
 {
-	int r1, r2;
+	char r1, r2;
 	os->pc = getRegs(os->pc, &r1, &r2);
 	os->regs[r1] -= os->regs[r2];
 }
 
 void mulFun(OpStream *os)
 {
-	int r1, r2;
+	char r1, r2;
 	os->pc = getRegs(os->pc, &r1, &r2);
 	os->regs[r1] *= os->regs[r2];
 }
 
 void divFun(OpStream *os)
 {
-	int r1, r2;
+	char r1, r2;
 	os->pc = getRegs(os->pc, &r1, &r2);
 	os->regs[r1] /= os->regs[r2];
 }
 
 void xorFun(OpStream *os)
 {
-	int r1, r2;
+	char r1, r2;
 	os->pc = getRegs(os->pc, &r1, &r2);
 	os->regs[r1] ^= os->regs[r2];
 }
 
 void andFun(OpStream *os)
 {
-	int r1, r2;
+	char r1, r2;
 	os->pc = getRegs(os->pc, &r1, &r2);
 	os->regs[r1] &= os->regs[r2];
 }
 
 void orFun(OpStream *os)
 {
-	int r1, r2;
+	char r1, r2;
 	os->pc = getRegs(os->pc, &r1, &r2);
 	os->regs[r1] |= os->regs[r2];
 }
 
 void lShiftFun(OpStream *os)
 {
-	int r1, r2;
+	char r1, r2;
 	os->pc = getRegs(os->pc, &r1, &r2);
 	uint32_t reg0 = os->regs[r1];
 	uint32_t reg1 = os->regs[r2];
@@ -77,7 +77,7 @@ void lShiftFun(OpStream *os)
 
 void rShiftFun(OpStream *os)
 {
-	int r1, r2;
+	char r1, r2;
 	os->pc = getRegs(os->pc, &r1, &r2);
 	uint32_t reg0 = os->regs[r1];
 	uint32_t reg1 = os->regs[r2];
@@ -87,7 +87,7 @@ void rShiftFun(OpStream *os)
 
 void pushFun(OpStream *os)
 {
-	int r1;
+	char r1;
 	os->pc = getRegs(os->pc, &r1, NULL);
 	uint32_t dat = os->regs[r1];
 	os->progStack.push(dat);
@@ -95,7 +95,7 @@ void pushFun(OpStream *os)
 
 void popFun(OpStream *os)
 {
-	int r1;
+	char r1;
 	os->pc = getRegs(os->pc, &r1, NULL);
 	uint32_t dat = os->progStack.top();
 	os->progStack.pop();
@@ -104,7 +104,7 @@ void popFun(OpStream *os)
 
 void ffiBindLib(OpStream *os)
 {
-	int r1, r2;
+	char r1, r2;
 	char name[64], fName[64];
 	char *nameLoc;
 	os->pc = getRegs(os->pc, &r1, &r2);
@@ -119,7 +119,7 @@ void ffiBindLib(OpStream *os)
 
 void ffiBindFun(OpStream *os)
 {
-	int r1, r2;
+	char r1, r2;
 	char name[64], fName[64], *nameLoc;
 	os->pc = getRegs(os->pc, &r1, &r2);
 	uint32_t offset = os->regs[r1];
@@ -131,31 +131,54 @@ void ffiBindFun(OpStream *os)
 	os->ffi.loadFun(name, fName);
 }
 
+void ffiCallFun1(void*, OpStream*);
+void ffiCallFun2(void*, OpStream*);
+void ffiCallFun3(void*, OpStream*);
+
 void ffiCallFun(OpStream *os)
 {
-	uint64_t r1, r2, r3, r4, r5, r6;
+	std::cout<<"start fficall\n";
 	uint64_t rVal = 0;
-	char *fun = os->pc;
 	char name[64];
-	strcpy(name, fun);
-	os->pc += 4;
-	r1 = os->regs[0];
-	r2 = os->regs[1];
-	r3 = os->regs[2];
-	r4 = os->regs[3];
-	r5 = os->regs[4];
-	r6 = os->regs[5];
-	asm __volatile__ ("movq %1, %%rdi;"
-		"movq %2, %%rsi;"
-		"movq %3, %%rdx;"
-		"movq %4, %%rcx;"
-		"movq %5, %%r8;"
-		"movq %6, %%r9;"
-		"call %7;"
-		"movq %%rax, %0;"
-		: "=r"(rVal)
-		: "r"(r1), "r"(r2), "r"(r3), "r"(r4), "r"(r5), "r"(r6), "r"(os->ffi.getFun(name))
-		: "%rsi", "%rdx", "%rcx", "%r8", "%r9");
+	uint64_t r1 = os->regs[7];
+	strncpy(name, os->pc, 64);
+	os->pc += strlen(name)+1;
+	void *fun = (void*)os->ffi.getFun(name);
+	if(r1 == 0)
+		*(void (*)())fun;
+	else if(r1 == 1)
+		ffiCallFun1(fun, os);
+	else if(r1 == 2)
+		ffiCallFun2(fun, os);
+	else if(r1 == 3)
+		ffiCallFun3(fun, os);
+	else
+		panic("not yet impl ffiCall>3\n");
+	std::cout<<"end fficall\n";
+}
+
+void ffiCallFun1(void *fun, OpStream *os)
+{
+	uint64_t r1 = os->regs[0];
+	void (*f1)(uint64_t) = (void (*)(uint64_t))fun;
+	f1(r1);
+}
+
+void ffiCallFun2(void *fun, OpStream *os)
+{
+	uint64_t r1 = os->regs[0];
+	uint64_t r2 = os->regs[1];
+	void (*f1)(uint64_t, uint64_t) = (void (*)(uint64_t, uint64_t))fun;
+	f1(r1, r2);
+}
+
+void ffiCallFun3(void *fun, OpStream *os)
+{
+	uint64_t r1 = os->regs[0];
+	uint64_t r2 = os->regs[1];
+	uint64_t r3 = os->regs[2];
+	void (*f1)(uint64_t, uint64_t, uint64_t) = (void (*)(uint64_t, uint64_t, uint64_t))fun;
+	f1(r1, r2, r3);
 }
 
 void jeFun(OpStream *os)
@@ -185,19 +208,20 @@ void movFun(OpStream *os)
 	dat2 = (uint32_t*)os->pc;
 	os->pc += sizeof(uint32_t);
 	os->regs[*dat1] = *dat2;
-	int i;
+	dat2++;
+	os->pc = (char*)dat2;
 }
 
 void movrFun(OpStream *os)
 {
-	int r1, r2;
+	char r1, r2;
 	os->pc = getRegs(os->pc, &r1, &r2);
 	os->regs[r1] = os->regs[r2];
 }
 
 void cmpFun(OpStream *os)
 {
-	int r1, r2;
+	char r1, r2;
 	uint32_t dat1, dat2;
 	os->pc = getRegs(os->pc, &r1, &r2);
 	dat1 = os->regs[r1];
@@ -222,6 +246,7 @@ void printOps(OpStream *os)
 
 void testOutFun(OpStream *os)
 {
+	printOps(os);
 	std::cout<<"printing registers\n";
 	for(int i=0;i<15;i++)
 		std::cout<<os->regs[i]<<"\n";
@@ -232,6 +257,17 @@ void testOutFun(OpStream *os)
 void errorFun(OpStream *os)
 {
 	std::cout<<"function not found\n";
+}
+
+void laFun(OpStream *os)
+{
+	uint32_t *offset;
+	uintptr_t obj;
+	offset = (uint32_t*)os->pc;
+	obj = (uintptr_t)os->prog + *offset;
+	offset++;
+	os->pc = (char*)offset;
+	os->regs[0] = obj;
 }
 
 void bindFunctions(OpStream *os)
@@ -257,5 +293,6 @@ void bindFunctions(OpStream *os)
 	(*os)[MOV] = movFun;
 	(*os)[MOVR] = movrFun;
 	(*os)[CMP] = cmpFun;
+	(*os)[LA] = laFun;
 	(*os)[0] = testOutFun;
 }

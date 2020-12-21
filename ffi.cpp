@@ -17,16 +17,27 @@ int FFI::openLib(std::string path, std::string name)
 	void *handle;
 	handle = dlopen(path.c_str(), RTLD_LAZY);
 	if(!handle)
+	{
+		std::cout<<dlerror()<<"\n";
 		panic("failed to load library " + name + path);
+	}
 	libs[name] = handle;
 	return 1;
 }
 
 int FFI::loadFun(std::string name, std::string lib)
 {
-	void *handle = libs[name];
+	void *handle = libs[lib];
+	if(!handle)
+		panic("lib "+lib+" not loaded\n");
 	void (*tfun)();
 	tfun = (void (*)())dlsym(handle, name.c_str());
+	if(!tfun)
+	{
+		std::cout<<name<<" "<<lib<<"\n";
+		std::cout<<dlerror()<<"\n";
+		panic("failed to load function " + name + lib);
+	}
 	funs[name] = tfun;
 	return 1;
 }
@@ -39,6 +50,9 @@ int FFI::callFun(std::string name)
 
 void *FFI::getFun(std::string name)
 {
-	return funs[name].target<void(*)()>();
+	std::cout<<name<<"\n";
+	if(!name.c_str())
+		return NULL;
+	return (void*)&funs[name];
 }
 

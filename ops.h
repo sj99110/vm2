@@ -26,7 +26,9 @@ enum OPS
     JNE,
     CMP,
     MOV,
-    MOVR
+    MOVR,
+    HLT,
+    LA
 };
 
 class OpStream
@@ -34,8 +36,8 @@ class OpStream
 public:
 	FFI ffi;
     char *pc, *prog, *start;
-    std::stack<uint32_t> progStack;
-    uint32_t regs[16];
+    std::stack<uintptr_t> progStack;
+    uintptr_t regs[16];
     size_t len;
     std::function<void(OpStream*)> funs[64];
     void processOp(char op);

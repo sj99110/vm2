@@ -12,6 +12,7 @@ OpStream::OpStream(uint32_t size, char *ops, uint32_t len)
     uint32_t startingOffset = *tmp;
     pc = new char[size];
     memcpy(pc, ops, len);
+    memset(regs, 0, sizeof(uintptr_t) * 15);
     start = pc;
     prog = pc;
     pc = prog + startingOffset;
@@ -24,7 +25,6 @@ OpStream::~OpStream()
 
 void OpStream::processOp(char op)
 {
-	std::cout<<(uint32_t)op<<"\n";
 	pc++;
     funs[op](this);
 }

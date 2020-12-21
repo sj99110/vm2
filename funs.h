@@ -4,3 +4,4 @@
 #include <iostream>
 
 void bindFunctions(OpStream *os);
+void printOps(OpStream *os);
