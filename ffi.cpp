@@ -30,8 +30,8 @@ int FFI::loadFun(std::string name, std::string lib)
 	void *handle = libs[lib];
 	if(!handle)
 		panic("lib "+lib+" not loaded\n");
-	void (*tfun)();
-	tfun = (void (*)())dlsym(handle, name.c_str());
+	void *tfun;
+	tfun = (void*)dlsym(handle, name.c_str());
 	if(!tfun)
 	{
 		std::cout<<name<<" "<<lib<<"\n";
@@ -44,7 +44,9 @@ int FFI::loadFun(std::string name, std::string lib)
 
 int FFI::callFun(std::string name)
 {
-	funs[name]();
+	void (*f1)();
+	f1 = (void(*)())funs[name];
+	f1();
 	return 1;
 }
 
@@ -53,6 +55,6 @@ void *FFI::getFun(std::string name)
 	std::cout<<name<<"\n";
 	if(!name.c_str())
 		return NULL;
-	return (void*)&funs[name];
+	return (void*)funs[name];
 }
 

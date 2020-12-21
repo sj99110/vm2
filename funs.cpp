@@ -143,9 +143,13 @@ void ffiCallFun(OpStream *os)
 	uint64_t r1 = os->regs[7];
 	strncpy(name, os->pc, 64);
 	os->pc += strlen(name)+1;
-	void *fun = (void*)os->ffi.getFun(name);
+	std::cout<<name<<"\n";
+	void *fun = (void*)os->ffi[name];
 	if(r1 == 0)
-		*(void (*)())fun;
+	{
+		void (*f1)() = (void (*)())fun;
+		f1();
+	}
 	else if(r1 == 1)
 		ffiCallFun1(fun, os);
 	else if(r1 == 2)

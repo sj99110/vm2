@@ -4,7 +4,7 @@
 #include <functional>
 #include <string>
 
-typedef std::function<void()> FFIFun;
+typedef void* FFIFun;
 
 class FFI
 {
@@ -20,7 +20,7 @@ class FFI
 	void *getFun(std::string name);
 	void* operator[](std::string name)
 	{
-		return (void*)&funs[name];
+		return (void*)funs[name];
 	}
 };
 
