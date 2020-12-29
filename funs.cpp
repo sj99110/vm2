@@ -104,6 +104,7 @@ void popFun(OpStream *os)
 
 void ffiBindLib(OpStream *os)
 {
+    #ifdef WITH_FFI
 	char r1, r2;
 	char name[64], fName[64];
 	char *nameLoc;
@@ -115,10 +116,15 @@ void ffiBindLib(OpStream *os)
 	nameLoc = os->prog + nameOffset;
 	strcpy(fName, nameLoc);
 	os->ffi.openLib(name, fName);
+    #else
+    os->pc += 2;
+    std::cerr<<"built with no FFI\n";
+    #endif
 }
 
 void ffiBindFun(OpStream *os)
 {
+    #ifdef WITH_FFI
 	char r1, r2;
 	char name[64], fName[64], *nameLoc;
 	os->pc = getRegs(os->pc, &r1, &r2);
@@ -129,6 +135,10 @@ void ffiBindFun(OpStream *os)
 	nameLoc = os->prog + nameOffset;
 	strcpy(fName, nameLoc);
 	os->ffi.loadFun(name, fName);
+    #else
+    os->pc += 2;
+    std::cerr<<"built with no FFI\n";
+    #endif
 }
 
 void ffiCallFun1(void*, OpStream*);
@@ -137,13 +147,12 @@ void ffiCallFun3(void*, OpStream*);
 
 void ffiCallFun(OpStream *os)
 {
-	std::cout<<"start fficall\n";
+    #ifdef WITH_FFI
 	uint64_t rVal = 0;
 	char name[64];
 	uint64_t r1 = os->regs[7];
 	strncpy(name, os->pc, 64);
 	os->pc += strlen(name)+1;
-	std::cout<<name<<"\n";
 	void *fun = (void*)os->ffi[name];
 	if(r1 == 0)
 	{
@@ -158,22 +167,33 @@ void ffiCallFun(OpStream *os)
 		ffiCallFun3(fun, os);
 	else
 		panic("not yet impl ffiCall>3\n");
-	std::cout<<"end fficall\n";
+    #else
+    os->pc += strlen(os->pc) + 1;
+    std::cerr<<"built with no FFI\n";
+    #endif
 }
 
 void ffiCallFun1(void *fun, OpStream *os)
 {
+    #ifdef WITH_FFI
 	uint64_t r1 = os->regs[0];
 	void (*f1)(uint64_t) = (void (*)(uint64_t))fun;
 	f1(r1);
+    #else
+    std::cerr<<"built with no FFI\n";
+    #endif
 }
 
 void ffiCallFun2(void *fun, OpStream *os)
 {
+    #ifdef WITH_FFI
 	uint64_t r1 = os->regs[0];
 	uint64_t r2 = os->regs[1];
 	void (*f1)(uint64_t, uint64_t) = (void (*)(uint64_t, uint64_t))fun;
 	f1(r1, r2);
+    #else
+    std::cerr<<"built with no FFI\n";
+    #endif
 }
 
 void ffiCallFun3(void *fun, OpStream *os)
@@ -221,6 +241,19 @@ void movrFun(OpStream *os)
 	char r1, r2;
 	os->pc = getRegs(os->pc, &r1, &r2);
 	os->regs[r1] = os->regs[r2];
+}
+
+void movQFun(OpStream *os)
+{
+	char *dat1;
+	uint64_t *dat2;
+	dat1 = os->pc;
+	os->pc++;
+	dat2 = (uint64_t*)os->pc;
+	os->pc += sizeof(uint64_t);
+	os->regs[*dat1] = *dat2;
+	dat2++;
+	os->pc = (char*)dat2;
 }
 
 void cmpFun(OpStream *os)
@@ -274,6 +307,26 @@ void laFun(OpStream *os)
 	os->regs[0] = obj;
 }
 
+void callFun(OpStream *os)
+{
+	std::cout<<"calling fun\n";
+    int len = strlen(os->pc);
+    char *name = new char[len+1];
+	strcpy(name, os->pc);
+	os->pc += len + 1;
+    os->progStack.push(os->pc - os->prog);
+    if(os->hostFuns.contains(name))
+        os->hostFuns[name]();
+    else
+        os->pc = os->prog + os->childFuns[name];
+}
+
+void retFun(OpStream *os)
+{
+    os->pc = os->prog + (os->progStack.top());
+	os->progStack.pop();
+}
+
 void bindFunctions(OpStream *os)
 {
 	for(int i=0;i<64;i++)
@@ -296,7 +349,10 @@ void bindFunctions(OpStream *os)
 	(*os)[JNE] = jneFun;
 	(*os)[MOV] = movFun;
 	(*os)[MOVR] = movrFun;
+	(*os)[MOVQ] = movQFun;
 	(*os)[CMP] = cmpFun;
 	(*os)[LA] = laFun;
+    (*os)[CALL] = callFun;
+    (*os)[RET] = retFun;
 	(*os)[0] = testOutFun;
 }

@@ -2,11 +2,17 @@
 #include <functional>
 #include <cstring>
 #include <string>
+#include <list>
+#include <utility>
+#include <sys/mman.h>
+#include <exception>
+#include <fstream>
 
 #include "slab.h"
 #include "ops.h"
 #include "funs.h"
 #include "ffi.h"
+#include "SymTable.h"
 
 void test(OpStream *os)
 {
@@ -48,7 +54,7 @@ char *setReg(char *pc, char reg, uint32_t data)
 char *setRegPtr(char *pc, char reg, uintptr_t data)
 {
 	uintptr_t *tmp;
-	*pc = MOV;
+	*pc = MOVQ;
 	pc++;
 	*pc = reg;
 	pc++;
@@ -99,93 +105,78 @@ char *movReg(char *op, char reg1, char reg2)
 	return op;
 }
 
-void buildOps(uint32_t size, char* ops)
+uint32_t createSymTable(char *pc, std::list<std::pair<uint32_t, uint32_t>> syms)
 {
-	char *ctmp;
-	uint32_t *tmp;
-	memset(ops, '0', size);
-	char *pc = ops + 4;
-	char *libNameOffset = pc;
-	ctmp = ops;
-	pc = putName(pc, "/usr/lib/x86_64-linux-gnu/libncurses.so.6.2");
-	char *ncurses = pc;
-	pc = putName(pc, "ncurses");
-	char *initScr = pc;
-	pc = putName(pc, "initscr");
-	char *raw = pc;
-	pc = putName(pc, "raw");
-	char *keypad = pc;
-	pc = putName(pc, "keypad");
-	char *noecho = pc;
-	pc = putName(pc, "noecho");
-	char *printw = pc;
-	pc = putName(pc, "printw");
-	char *getch = pc;
-	pc = putName(pc, "getch");
-	char *arg1 = pc;
-	pc = putName(pc, "%i");
-	char *_start = pc;
-	pc = setReg(pc, 0, libNameOffset - ctmp);
-	pc = setReg(pc, 1, ncurses - ctmp);
-	pc = ORR(pc, FFIBINDLIB, 0, 1);
-	pc = setReg(pc, 0, initScr - ctmp);
-	pc = setReg(pc, 1, ncurses - ctmp);
-	pc = ORR(pc, FFIBINDFUN, 0, 1);
-	pc = setReg(pc, 0, raw - ctmp);
-	pc = setReg(pc, 1, ncurses - ctmp);
-	pc = ORR(pc, FFIBINDFUN, 0, 1);
-	pc = setReg(pc, 0, keypad - ctmp);
-	pc = setReg(pc, 1, ncurses - ctmp);
-	pc = ORR(pc, FFIBINDFUN, 0, 1);
-	pc = setReg(pc, 0, noecho  - ctmp);
-	pc = setReg(pc, 1, ncurses - ctmp);
-	pc = ORR(pc, FFIBINDFUN, 0, 1);
-	pc = setReg(pc, 0, printw - ctmp);
-	pc = setReg(pc, 1, ncurses - ctmp);
-	pc = ORR(pc, FFIBINDFUN, 0, 1);
-	pc = setReg(pc, 0, getch - ctmp);
-	pc = setReg(pc, 1, ncurses - ctmp);
-	pc = ORR(pc, FFIBINDFUN, 0, 1);
-	pc = setReg(pc, 4, 10);
-	pc = setReg(pc, 0, 0);
-	pc = setReg(pc, 1, 1);
-	pc = setReg(pc, 4, 10);
-	char *jmp = pc;
-	pc = ORR(pc, ADD, 0, 1);
-	pc = ORR(pc, CMP, 0, 4);
-	pc = OUINT(pc, JNE, jmp - ctmp);
-	pc = setReg(pc, 7, 0);
-	pc = OSTR(pc, FFICALL, "initscr");
-	pc = OSTR(pc, FFICALL, "raw");
-	pc = OSTR(pc, FFICALL, "noecho");
-	pc = movReg(pc, 0, 6);
-	pc = setRegPtr(pc, 0, (uintptr_t)arg1);
-	pc = movReg(pc, 6, 1);
-	pc = setReg(pc, 7, 2);
-	pc = OSTR(pc, FFICALL, "printw");
-	pc = setReg(pc, 7, 0);
-	pc = OSTR(pc, FFICALL, "getch");
-	*pc = HLT;
-	pc++;
-	uint32_t *start = (uint32_t*)ops;
-	*start = _start - ops;
-	ops++;
+    uint32_t entries = syms.size();
+    uint32_t off, nameOff;
+    SymTable *table = (SymTable*)pc;
+    SymHeader header;
+    SymTableEntry *_entries = table->entries;
+    uint32_t offset = ((char*)_entries - pc) + (sizeof(SymTableEntry) * entries);
+    header.entries = entries;
+    header.MAGIC_NUMBER = 0x800C244;
+    header.size = sizeof(SymTable) + (sizeof(SymTableEntry) * entries);
+    header.version = 0;
+    table->header = header;
+    for(int i=0;i<entries;i++)
+    {
+        std::tie<uint32_t, uint32_t>(off, nameOff) = syms.back();
+        _entries[i].type = 0;
+        _entries[i].offset = off;
+        _entries[i].name = nameOff;
+        syms.pop_back();
+    }
+    return offset;
 }
 
-void buildOps2(int size, char *ops)
+typedef std::pair<uint32_t, uint32_t> SymPair;
+
+char *buildBytecode(char *proc, std::list<SymPair> symList, uint32_t size)
 {
-	char *pc = ops+4;
-	char *start = pc;
-	pc = setReg(pc, 0, 0);
-	pc = setReg(pc, 1, 1);
-	pc = setReg(pc, 4, 10);
-	char *jmp = pc;
-	pc = ORR(pc, ADD, 0, 1);
-	pc = ORR(pc, CMP, 0, 4);
-	pc = OUINT(pc, JNE, jmp - ops);
-	pc = OUINT(pc, HLT, 1);
-	uint32_t *begin = (uint32_t*)ops;
-	*begin = start - ops;
+    uint32_t entries = symList.size();
+    uint32_t symSize = sizeof(SymTable) + (sizeof(SymTableEntry) * entries);
+    char *bytecode = new char[symSize + size];
+    if(!bytecode)
+        exit(-2);
+    uint32_t pcOffset = createSymTable(bytecode, symList);
+    memcpy(bytecode + pcOffset, proc, size);
+    return bytecode;
+}
+
+char *buildOps1(char *ops)
+{
+    char *pc = ops;
+    char *_main = pc;
+    pc = putName(pc, "main");
+    char *_addLoop = pc;
+    pc = putName(pc, "addLoop");
+    char *_add = pc;
+    pc = putName(pc, "add");
+    char *main = pc;
+    pc = setReg(pc, 4, 10);
+    setReg(pc, 0, 0);
+    pc = setReg(pc, 1, 1);
+    pc = OSTR(pc, CALL, "addLoop");
+    *pc = HLT;
+    pc++;
+    char *addLoop = pc;
+    char *jmp = pc;
+    pc = OSTR(pc, CALL, "add");
+    pc = ORR(pc, CMP, 0, 4);
+    pc = OUINT(pc, JNE, jmp - ops);
+    *pc = RET;
+    pc++;
+    char *addfun = pc;
+    pc = ORR(pc, ADD, 0, 1);
+    *pc = RET;
+    *pc++;
+    std::list<std::pair<uint32_t, uint32_t>> funList;
+    funList.push_back(SymPair(main - ops, _main - ops));
+    funList.push_back(SymPair(addLoop - ops, _addLoop - ops));
+    funList.push_back(SymPair(addfun - ops, _add - ops));
+    char *prog = buildBytecode(ops, funList, pc - ops);
+    free(ops);
+    return prog;
 }
 
 void hltFun(OpStream *os)
@@ -196,24 +187,34 @@ void hltFun(OpStream *os)
 
 int main(int argc, char *argv[])
 {
-	char ops[512];
-	buildOps(512, ops);
+	char *ops = new char[512];
+	char *prog = buildOps1(ops);
+    std::ofstream file("file", std::ofstream::out);
+    file.write(prog, 512);
+    /*
     SlabAllocator slab(4096, 4);
     Object obj = *slab.slabAlloc(32);
     putStr(obj, "hello, world\0");
     std::cout<<obj.getPrim()<<"\n";
     slab.slabFree(&obj);
-    OpStream os = OpStream(1024, ops, 512);
-    std::cout<<(uint32_t)MOV<<"\n";
+    */
+    OpStream os = OpStream(1024, prog, 512);
     std::cout<<"binding funs\n";
     bindFunctions(&os);
     os.funs[HLT] = hltFun;
-    std::cout<<"begin: "<<(uint32_t)*ops<<"\n";
     std::cout<<"running stream\n";
     try {
-		os.run();
-	} catch(const std::bad_function_call& e) {
+		os.run(HLT);
+	} catch(const std::exception& e) {
 		std::cout<<e.what()<<" error\n";
+        for(auto fun : os.childFuns)
+        {
+            std::cout<<"fun:\n";
+            std::cout<<fun.first << " " << fun.second << "\n";
+        }
+        delete prog;
+        return -1;
 	}
+    delete prog;
     return 1;
 }

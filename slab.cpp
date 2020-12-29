@@ -161,4 +161,11 @@ int SlabAllocator::slabFree(Object *object)
 }
 
 SlabAllocator::~SlabAllocator()
-{}
+{
+    if(cache.empty)
+        munmap(cache.empty, pageSize);
+    if(cache.full)
+        munmap(cache.full, pageSize);
+    if(cache.partial)
+        munmap(cache.partial, pageSize);
+}

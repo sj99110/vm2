@@ -3,8 +3,11 @@
 #include <cstdint>
 #include <functional>
 #include <stack>
+#include <map>
 
+#ifdef WITH_FFI
 #include "ffi.h"
+#endif
 
 enum OPS
 {
@@ -26,15 +29,22 @@ enum OPS
     JNE,
     CMP,
     MOV,
+    MOVQ,
     MOVR,
     HLT,
-    LA
+    LA,
+    CALL,
+    RET
 };
 
 class OpStream
 {
 public:
+    #ifdef WITH_FFI
 	FFI ffi;
+    #endif
+    std::map<std::string, void(*)()> hostFuns;
+    std::map<std::string, uint32_t> childFuns;
     char *pc, *prog, *start;
     std::stack<uintptr_t> progStack;
     uintptr_t regs[16];
@@ -43,8 +53,11 @@ public:
     void processOp(char op);
     OpStream(uint32_t size, char *ops, uint32_t len);
     ~OpStream();
-    void run();
+    void run(OPS);
     void registerFun(std::function<void(OpStream*)> fun, char op);
+    void bindHostFun(std::string, void (*fun)());
+    void unbindHostFun(std::string);
+    void callVMFun(std::string);
     std::function<void(OpStream*)>& operator [](int i)
     {
         return funs[i];
