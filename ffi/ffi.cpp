@@ -6,6 +6,21 @@
 
 #include "ffi.h"
 
+FFI::FFI()
+{
+	
+}
+
+FFI::~FFI()
+{
+	for(auto const& [key, val] : libs)
+	{
+		dlclose(val);
+	}
+	libs.clear();
+	funs.clear();
+}
+
 void panic(std::string str)
 {
 	std::cout<<str<<"\n";
@@ -22,6 +37,7 @@ int FFI::openLib(std::string path, std::string name)
 		panic("failed to load library " + name + path);
 	}
 	libs[name] = handle;
+	std::cout<<"loaded " << name << "\n";
 	return 1;
 }
 

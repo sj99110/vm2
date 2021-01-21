@@ -105,30 +105,6 @@ char *movReg(char *op, char reg1, char reg2)
 	return op;
 }
 
-uint32_t createSymTable(char *pc, std::list<std::pair<uint32_t, uint32_t>> syms)
-{
-    uint32_t entries = syms.size();
-    uint32_t off, nameOff;
-    SymTable *table = (SymTable*)pc;
-    SymHeader header;
-    SymTableEntry *_entries = table->entries;
-    uint32_t offset = ((char*)_entries - pc) + (sizeof(SymTableEntry) * entries);
-    header.entries = entries;
-    header.MAGIC_NUMBER = 0x800C244;
-    header.size = sizeof(SymTable) + (sizeof(SymTableEntry) * entries);
-    header.version = 0;
-    table->header = header;
-    for(int i=0;i<entries;i++)
-    {
-        std::tie<uint32_t, uint32_t>(off, nameOff) = syms.back();
-        _entries[i].type = 0;
-        _entries[i].offset = off;
-        _entries[i].name = nameOff;
-        syms.pop_back();
-    }
-    return offset;
-}
-
 typedef std::pair<uint32_t, uint32_t> SymPair;
 
 char *buildBytecode(char *proc, std::list<SymPair> symList, uint32_t size)
@@ -154,7 +130,7 @@ char *buildOps1(char *ops)
     pc = putName(pc, "add");
     char *main = pc;
     pc = setReg(pc, 4, 10);
-    setReg(pc, 0, 0);
+    pc = setReg(pc, 0, 0);
     pc = setReg(pc, 1, 1);
     pc = OSTR(pc, CALL, "addLoop");
     *pc = HLT;
@@ -170,12 +146,11 @@ char *buildOps1(char *ops)
     pc = ORR(pc, ADD, 0, 1);
     *pc = RET;
     *pc++;
-    std::list<std::pair<uint32_t, uint32_t>> funList;
+    std::list<SymPair> funList;
     funList.push_back(SymPair(main - ops, _main - ops));
     funList.push_back(SymPair(addLoop - ops, _addLoop - ops));
     funList.push_back(SymPair(addfun - ops, _add - ops));
     char *prog = buildBytecode(ops, funList, pc - ops);
-    free(ops);
     return prog;
 }
 
@@ -188,8 +163,10 @@ void hltFun(OpStream *os)
 int main(int argc, char *argv[])
 {
 	char *ops = new char[512];
+    memset(ops, '\0', 512);
 	char *prog = buildOps1(ops);
-    std::ofstream file("file", std::ofstream::out);
+    memset(ops, '\0', 512);
+    std::ofstream file("test1", std::ofstream::out);
     file.write(prog, 512);
     /*
     SlabAllocator slab(4096, 4);
@@ -198,23 +175,6 @@ int main(int argc, char *argv[])
     std::cout<<obj.getPrim()<<"\n";
     slab.slabFree(&obj);
     */
-    OpStream os = OpStream(1024, prog, 512);
-    std::cout<<"binding funs\n";
-    bindFunctions(&os);
-    os.funs[HLT] = hltFun;
-    std::cout<<"running stream\n";
-    try {
-		os.run(HLT);
-	} catch(const std::exception& e) {
-		std::cout<<e.what()<<" error\n";
-        for(auto fun : os.childFuns)
-        {
-            std::cout<<"fun:\n";
-            std::cout<<fun.first << " " << fun.second << "\n";
-        }
-        delete prog;
-        return -1;
-	}
-    delete prog;
-    return 1;
+   delete prog;
+    return 0;
 }

@@ -90,15 +90,15 @@ void pushFun(OpStream *os)
 	char r1;
 	os->pc = getRegs(os->pc, &r1, NULL);
 	uint32_t dat = os->regs[r1];
-	os->progStack.push(dat);
+	os->progStack.push_back(dat);
 }
 
 void popFun(OpStream *os)
 {
 	char r1;
 	os->pc = getRegs(os->pc, &r1, NULL);
-	uint32_t dat = os->progStack.top();
-	os->progStack.pop();
+	uint32_t dat = os->progStack.back();
+	os->progStack.pop_back();
 	os->regs[r1] = dat;
 }
 
@@ -314,17 +314,17 @@ void callFun(OpStream *os)
     char *name = new char[len+1];
 	strcpy(name, os->pc);
 	os->pc += len + 1;
-    os->progStack.push(os->pc - os->prog);
+    os->progStack.push_back(os->pc - os->prog);
     if(os->hostFuns.contains(name))
-        os->hostFuns[name]();
+        os->hostFuns[name](os);
     else
         os->pc = os->prog + os->childFuns[name];
 }
 
 void retFun(OpStream *os)
 {
-    os->pc = os->prog + (os->progStack.top());
-	os->progStack.pop();
+    os->pc = os->prog + (os->progStack.back());
+	os->progStack.pop_back();
 }
 
 void bindFunctions(OpStream *os)

@@ -6,6 +6,7 @@
 #include <iostream>
 #include <utility>
 #include <map>
+#include <exception>
 
 OpStream::OpStream(uint32_t size, char *ops, uint32_t len)
 {
@@ -25,6 +26,8 @@ OpStream::OpStream(uint32_t size, char *ops, uint32_t len)
 OpStream::~OpStream()
 {
     delete start;
+    childFuns.clear();
+    hostFuns.clear();
 }
 
 void OpStream::processOp(char op)
@@ -38,14 +41,14 @@ void OpStream::registerFun(std::function<void(OpStream*)> fun, char op)
     funs[op] = fun;
 }
 
-void OpStream::bindHostFun(std::string name, void (*fun)())
+void OpStream::bindHostFun(std::string name, std::function<void(OpStream*)> fun)
 {
     hostFuns[name] = fun;
 }
 
 void OpStream::unbindHostFun(std::string name)
 {
-    hostFuns[name] = (void (*)())NULL;
+    hostFuns.erase(name);
 }
 
 void OpStream::callVMFun(std::string name)
@@ -65,8 +68,9 @@ void OpStream::callVMFun(std::string name)
 
 void OpStream::run(OPS end)
 {
+    if(!childFuns.contains("main"))
+        std::invalid_argument("no main function found");
     pc = prog + childFuns["main"];
-    std::cout<<childFuns["main"]<<"\n";
     while(1)
     {
         if(end == *pc)

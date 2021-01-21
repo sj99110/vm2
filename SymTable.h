@@ -27,3 +27,4 @@ struct SymTable
 
 std::pair<uint32_t, std::map<std::string, uint32_t>> buildSymTable(char *pc);
 std::pair<std::string, uint32_t> handleEntry(SymTableEntry entry, char *pc);
+uint32_t createSymTable(char *pc, std::list<std::pair<uint32_t, uint32_t>> syms);

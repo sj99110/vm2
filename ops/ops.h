@@ -4,6 +4,7 @@
 #include <functional>
 #include <stack>
 #include <map>
+#include <list>
 
 #ifdef WITH_FFI
 #include "ffi.h"
@@ -43,10 +44,10 @@ public:
     #ifdef WITH_FFI
 	FFI ffi;
     #endif
-    std::map<std::string, void(*)()> hostFuns;
+    std::map<std::string, std::function<void(OpStream*)>> hostFuns;
     std::map<std::string, uint32_t> childFuns;
     char *pc, *prog, *start;
-    std::stack<uintptr_t> progStack;
+    std::list<uintptr_t> progStack;
     uintptr_t regs[16];
     size_t len;
     std::function<void(OpStream*)> funs[64];
@@ -55,7 +56,7 @@ public:
     ~OpStream();
     void run(OPS);
     void registerFun(std::function<void(OpStream*)> fun, char op);
-    void bindHostFun(std::string, void (*fun)());
+    void bindHostFun(std::string, std::function<void(OpStream*)> fun);
     void unbindHostFun(std::string);
     void callVMFun(std::string);
     std::function<void(OpStream*)>& operator [](int i)

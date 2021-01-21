@@ -16,8 +16,6 @@ SlabAllocator::SlabAllocator(size_t size, size_t oSize)
     pageSize = size;
     objSize = oSize;
     initCache();
-    Slab *newSlab = createSlab();
-    cache.empty = newSlab;
     cache.size += 1;
 }
 
@@ -35,7 +33,9 @@ void SlabAllocator::initCache()
 Slab *SlabAllocator::createSlab()
 {
     Object *newObject;
-    Slab *newSlab = (Slab*)mmap(0, pageSize*sizeof(char), PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, 0, 0);
+    Slab *newSlab = (Slab*)mmap(0, pageSize*sizeof(char),
+         PROT_READ | PROT_WRITE,
+          MAP_ANONYMOUS | MAP_PRIVATE, 0, 0);
     if(newSlab == MAP_FAILED)
         std::cout<<"alloc failure "<<errno<<"\n";
     newSlab->p = NULL;

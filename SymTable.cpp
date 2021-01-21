@@ -1,6 +1,7 @@
 #include <cstring>
 #include <tuple>
 #include <exception>
+#include <list>
 
 
 #include "SymTable.h"
@@ -33,4 +34,28 @@ std::pair<std::string, uint32_t> handleEntry(SymTableEntry entry, char *pc)
     auto ret = std::pair<std::string, uint32_t>(_name, offset);
     delete name;
     return ret;
+}
+
+uint32_t createSymTable(char *pc, std::list<std::pair<uint32_t, uint32_t>> syms)
+{
+    uint32_t entries = syms.size();
+    uint32_t off, nameOff;
+    SymTable *table = (SymTable*)pc;
+    SymHeader header;
+    SymTableEntry *_entries = table->entries;
+    uint32_t offset = ((char*)_entries - pc) + (sizeof(SymTableEntry) * entries);
+    header.entries = entries;
+    header.MAGIC_NUMBER = 0x800C244;
+    header.size = sizeof(SymTable) + (sizeof(SymTableEntry) * entries);
+    header.version = 0;
+    table->header = header;
+    for(int i=0;i<entries;i++)
+    {
+        std::tie<uint32_t, uint32_t>(off, nameOff) = syms.back();
+        _entries[i].type = 0;
+        _entries[i].offset = off;
+        _entries[i].name = nameOff;
+        syms.pop_back();
+    }
+    return offset;
 }
